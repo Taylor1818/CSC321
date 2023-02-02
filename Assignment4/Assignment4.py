@@ -1,56 +1,39 @@
-from bcrypt import hashpw
+import bcrypt
 from nltk.corpus import words
-from multiprocessing import Process
+import time
 
-ENCODING = 'utf-8'
-
-class User:
-  def __init__(self, name:str, salt:bytes, hash:bytes) -> None:
-    self.name = name
-    self.salt = salt
-    self.hash = hash
-  
-  def __repr__(self):
-    return self.name
-
-def crack(users:'list[User]'):
-  user_dict = dict()
-  for user in users:
-    if user.salt in user_dict.keys():
-      user_dict[user.salt].append(user)
-    else:
-      user_dict[user.salt] = [user]
-  for salt in user_dict.keys():
-    crack_by_salt(user_dict[salt])
-    p = Process(target=crack_by_salt, args=(user_dict[salt], ))
-    p.start()
-    p.join()
-
-def crack_by_salt(user_list: 'list[User]'):
-  salt = user_list[0].salt
-  word_list = [w for w in words.words() if len(w) >= 6 and len(w) <= 10]
-  for word in word_list:
-    hash_pass = hashpw(word.encode(ENCODING), salt)
-    for user in user_list:
-      if hash_pass == user.hash:
-        print(f'{user.name} password: {word}')
-        user_list.remove(user)
-
-def read_users():
-  users = []
-  with open('shadow.txt', 'r') as file:
-    lines = file.readlines()
-    for line in lines:
-      name_split = line.split(':')
-      hash_split = line.split('$')
-      name = name_split[0]
-      salt = name_split[1][:29].encode(ENCODING)
-      hash_val = name_split[1].strip().encode(ENCODING)
-      users.append(User(name, salt, hash_val))
-  return users
+def crack_pw(salt, hash, words):
+    # Given a salt, its hash, and a list of words,
+    # Find which word from the list hashes to same value
+    for w in words:
+        # Only test hash word if its within char limit for password
+        if (len(w) > 5) and (len(w) < 11):
+            pwhash = bcrypt.hashpw(w.encode(), salt.encode())
+            if pwhash == (salt+hash).encode():
+                return w
+    # If password never found, return default msg
+    return "PASSWORD NOT FOUND"
 
 def main():
-  crack(read_users())
+    # Read and process each line and crack its password
+    # wordlist = nltk.corpus.words.words()
+    with open("shadow.txt", "r") as file:
+        for line in file: # Keep going while there's a line in file
+            i = 0
+            while line[i] != '$':
+                i += 1
+            user = line[:i]
+            salt = line[i:i+29]
+            hash = line[i+29:-1]
+
+            print("\nUSER: " + user[:-1] + "\nSALT: " + salt + "\nHASH: " + hash)
+            # print("SALT LENGTH: " + str(len(salt)) + "\nHASH LENGTH: " + str(len(hash)) + "\n")
+
+            start = time.time()
+            pw = crack_pw(salt, hash, words.words())
+            end = time.time()
+            print(user[:-1] + "'s password cracked after " + str(end - start) + " seconds")
+            print("Password: " + pw + "\n") 
 
 if __name__ == '__main__':
-  main()
+    main()
